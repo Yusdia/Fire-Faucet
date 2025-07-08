@@ -96,4 +96,4 @@ Payout Boost   : ${status.boost}
   } catch (err) {
     console.error('[FATAL] Terjadi kesalahan:', err.message);
   }
-})(
+})();
