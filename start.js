@@ -1,75 +1,70 @@
-const puppeteer = require('puppeteer');
+const axios = require("axios").default;
+const tough = require("tough-cookie");
+const { wrapper } = require("axios-cookiejar-support");
 
-(async () => {
-  const browser = await puppeteer.launch({
-    headless: false, // ganti true jika headless aktif di Termux Anda
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+const jar = new tough.CookieJar();
+const client = wrapper(axios.create({ jar, withCredentials: true }));
 
-  const page = await browser.newPage();
+const USERNAME = 'Yusdia';
+const PASSWORD = '010892gw_E';
 
-  await page.goto('https://firefaucet.win/login', { waitUntil: 'networkidle2' });
+async function login() {
+  try {
+    const getLoginPage = await client.get('https://firefaucet.win/login');
+    const csrfMatch = getLoginPage.data.match(/name="csrf_token" value="(.*?)"/);
+    const csrf_token = csrfMatch ? csrfMatch[1] : '';
 
-  // Isi login
-  await page.type('input[name="username"]', 'USERNAME_ANDA');
-  await page.type('input[name="password"]', 'PASSWORD_ANDA');
-  await page.click('button[type="submit"]');
-
-  await page.waitForNavigation({ waitUntil: 'networkidle2' });
-
-  console.log('[✓] Login berhasil.');
-
-  // Buka halaman /start
-  await page.goto('https://firefaucet.win/start', { waitUntil: 'networkidle2' });
-
-  console.log('[✓] Masuk halaman Auto Faucet.');
-
-  // Klik tombol "Start Auto Faucet"
-  await page.evaluate(() => {
-    const btn = [...document.querySelectorAll('button')].find(el =>
-      el.textContent.toLowerCase().includes('start auto')
-    );
-    if (btn) btn.click();
-  });
-
-  console.log('[✓] Auto Faucet dimulai.');
-
-  // Looping pemantauan laporan setiap 60 detik
-  while (true) {
-    const data = await page.evaluate(() => {
-      const getText = (selector) => {
-        const el = document.querySelector(selector);
-        return el ? el.innerText.trim() : 'N/A';
-      };
-
-      return {
-        currency: getText('.currency-select') || 'DOGE',
-        next: getText('.countdown') || '60 seconds',
-        claims: getText('div:has-text("Auto Claims Remaining")'),
-        timeLeft: getText('div:has-text("Time until Faucet Stops")'),
-        boost: getText('div:has-text("Payout Boost")'),
-      };
+    const payload = new URLSearchParams({
+      username: USERNAME,
+      password: PASSWORD,
+      csrf_token,
+      submit: 'Login'
     });
 
-    const now = new Date().toLocaleString();
-    console.clear();
-    console.log(`
-=============================================
-         🔥 FIREFAUCET AUTO REPORT 🔥
-=============================================
-Currency Selected        : ${data.currency}
-Next Payout In           : ${data.next}
-Auto Claims Remaining    : ${data.claims}
-Time Until Faucet Stops  : ${data.timeLeft}
-Payout Boost             : ${data.boost}
-Status                   : ✅ Auto Payout Running
+    const res = await client.post('https://firefaucet.win/login', payload.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      maxRedirects: 0,
+      validateStatus: status => status === 302
+    });
 
-Updated At               : ${now}
-=============================================
-    `);
-
-    await page.waitForTimeout(60000); // tunggu 60 detik
+    console.log('[✓] Login berhasil');
+  } catch (err) {
+    console.error('[✗] Login gagal:', err.response?.status || err.message);
+    process.exit(1);
   }
+}
 
-  // Tidak ditutup karena auto faucet berjalan terus
-})();
+async function startAutoFaucet() {
+  try {
+    const startPage = await client.get('https://firefaucet.win/start');
+    const startToken = startPage.data.match(/data-token="(.*?)"/);
+    const token = startToken ? startToken[1] : '';
+
+    if (!token) {
+      console.log('[!] Gagal menemukan token tombol Start Auto Faucet.');
+      return;
+    }
+
+    const res = await client.post('https://firefaucet.win/startAutoFaucet', {
+      token
+    });
+
+    if (res.data && res.data.success) {
+      console.log('[✓] Auto Faucet dimulai.');
+    } else {
+      console.log('[✗] Gagal memulai Auto Faucet:', res.data.message || 'Unknown');
+    }
+  } catch (err) {
+    console.error('[✗] Error:', err.message);
+  }
+}
+
+async function main() {
+  await login();
+  await startAutoFaucet();
+  console.log('[⏳] Auto faucet berjalan setiap 60 detik secara otomatis oleh sistem situs.');
+}
+
+main();
