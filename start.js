@@ -5,8 +5,8 @@ const { wrapper } = require("axios-cookiejar-support");
 const jar = new tough.CookieJar();
 const client = wrapper(axios.create({ jar, withCredentials: true }));
 
-const USERNAME = 'USERNAME_ANDA';
-const PASSWORD = 'PASSWORD_ANDA';
+const USERNAME = 'yusdia';
+const PASSWORD = '010892gw_E';
 
 async function login() {
   const res = await client.get('https://www.firefaucet.win/login');
